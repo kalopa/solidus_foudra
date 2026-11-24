@@ -79,31 +79,6 @@ dashed number (`902-40169-00`), kept in `part_number_column`, and need not be
 the SKU. A variant without one is the shop's own business: its lines are left
 off Foudra's sales orders and its stock isn't touched.
 
-### Kalopa's shop
-
-```ruby
-SolidusFoudra.configure do |config|
-  config.base_url = "https://kalopa.foudra.com"
-  config.api_key = Rails.application.credentials.dig(:foudra, :api_key)
-  config.webhook_secret = Rails.application.credentials.dig(:foudra, :webhook_secret)
-  config.channel = "SHOP"                    # whatever code the shop's channel has in Foudra
-  config.part_number_column = :stock_code    # KRT-XL's stock_code is 902-40169-00
-  config.send_orders_since = Time.zone.parse("<go-live time>")
-end
-```
-
-- Its prices are Irish gross (`admin_vat_country_iso = "IE"`) with
-  `Kalopa::FlatGrossVatPriceGenerator` deriving the other countries' prices:
-  the listing price in Foudra must be the gross EUR price. The gem sets the
-  default price and asks Solidus to rebuild the VAT prices from it.
-- The unit prices it sends to Foudra are the line items' prices, VAT included.
-- **Switch off kalsync's Solidus routines** (`solidus_orders_to_foudra`,
-  `foudra_stock_to_solidus`) when this goes live. Both would otherwise raise
-  the same orders as demand a second time and fight over stock counts. Set
-  `send_orders_since` to after kalsync's last run so the nightly pass doesn't
-  re-send orders kalsync already raised.
-- Rack::Attack: make sure `/foudra/webhooks` isn't throttled.
-
 ## What Foudra must have
 
 1. **A channel** for the shop (Foudra → Sales channels), its code in `config.channel`.
