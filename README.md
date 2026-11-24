@@ -12,8 +12,7 @@ The shop sells; Foudra makes, stocks and ships.
 
 ## Who owns what
 
-Foudra's rule (its CLAUDE.md §4.5): **Foudra owns the physical facts, never
-money.** So:
+Foudra's rule: **Foudra owns the physical facts, never money.** So:
 
 - **Foudra owns** stock, what is listed for sale, and shipping. The shop shows
   Foudra's available stock, never its own idea of it, and ships what Foudra
