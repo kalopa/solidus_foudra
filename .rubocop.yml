@@ -1,0 +1,12 @@
+require:
+  - solidus_dev_support/rubocop
+
+AllCops:
+  NewCops: disable
+  SuggestExtensions: false
+  # Shorthand hash syntax (`customer_id:`) and anonymous block args need 3.1.
+  TargetRubyVersion: 3.1
+  Exclude:
+    - spec/dummy/**/*
+    - vendor/**/*
+    - bin/**/*
