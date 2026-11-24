@@ -73,11 +73,26 @@ RSpec.describe SolidusFoudra::Client do
     expect(client.parts.map { |p| p["id"] }).to eq([1, 2])
   end
 
-  it "finds a part by its exact number only" do
-    stub_foudra(:get, "/api/parts", query: {q: "100-000001-00", per: "25"},
-      body: {data: [{id: 1, part_number: "100-000001-01"},
-        {id: 2, part_number: "100-000001-00"}]})
+  it "finds a part by its exact number" do
+    stub_foudra(:get, "/api/parts", query: {part_number: "100-000001-00", per: "10"},
+      body: {data: [{id: 2, part_number: "100-000001-00"}], page: 1, pages: 1})
     expect(client.find_part("100-000001-00")["id"]).to eq(2)
+  end
+
+  it "finds one listing by part id, nil when never listed" do
+    stub_foudra(:get, "/api/channels/SHOP/listings", query: {part_id: "7"}, body: {data: []})
+    expect(client.listing(7)).to be_nil
+  end
+
+  it "finds a customer by the shop's ref and adds a ref to another" do
+    stub_foudra(:get, "/api/customers", query: {channel: "SHOP", channel_ref: "42", per: "10"},
+      body: {data: [{id: 5}]})
+    expect(client.customer_by_channel_ref(42)["id"]).to eq(5)
+    stub = stub_request(:put, foudra_url("/api/customers/5"))
+      .with(body: {channel_refs: [{channel: "SHOP", ref: "42"}]}, headers: {"Idempotency-Key" => "k"})
+      .to_return(body: '{"data":{"id":5}}')
+    client.add_channel_ref(5, 42, idempotency_key: "k")
+    expect(stub).to have_been_requested
   end
 
   it "refuses to run unconfigured" do

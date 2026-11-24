@@ -121,10 +121,13 @@ Check it all with `bin/rails solidus_foudra:status`.
 Foudra cancels what hasn't shipped; an order that has all shipped is left
 (409, logged).
 
-Every write carries an `Idempotency-Key` (`solidus_foudra:order:<number>`,
-`solidus_foudra:cancel:<number>`, `solidus_foudra:customer:<digest of the body>`:
-Foudra refuses one key with two different bodies, so a customer's key changes
-with their details).
+Every order and customer write carries an `Idempotency-Key`
+(`solidus_foudra:order:<number>`, `solidus_foudra:cancel:<number>`,
+`solidus_foudra:customer:<digest of the body>`,
+`solidus_foudra:customer-ref:<customer>:<user>`: Foudra refuses one key with
+two different bodies, so a customer's key changes with their details). The
+listing write-back (`PUT /api/channels/{code}/listings/{part}`) takes none;
+it is safe to repeat.
 
 ### Webhooks
 

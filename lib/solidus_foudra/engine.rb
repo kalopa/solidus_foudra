@@ -16,6 +16,11 @@ module SolidusFoudra
 
     engine_name "solidus_foudra"
 
+    # Before Solidus's to_prepare subscribes every class in the set.
+    initializer "solidus_foudra.subscribers" do
+      Spree::Config.environment.subscribers << "SolidusFoudra::OrderSubscriber"
+    end
+
     config.generators do |g|
       g.test_framework :rspec
     end

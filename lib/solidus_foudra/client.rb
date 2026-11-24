@@ -81,10 +81,10 @@ module SolidusFoudra
       get("/api/parts/#{Integer(id)}")["data"]
     end
 
-    # A part by its exact part number. ?q= also matches other text, so
-    # compare; nil when Foudra has no such part.
+    # A part by its exact part number (display or canonical form); nil
+    # when Foudra has no such part.
     def find_part(part_number)
-      get("/api/parts", q: part_number, per: 25)["data"].find { |p| p["part_number"] == part_number }
+      get("/api/parts", part_number:, per: 10)["data"].first
     end
 
     def parts(&)
@@ -109,6 +109,12 @@ module SolidusFoudra
       get("/api/channels/#{escape(channel)}/listings")["data"]
     end
 
+    # The channel's listing of one part (listed or not); nil when the part
+    # has never been listed on it.
+    def listing(part_id, channel = config.channel)
+      get("/api/channels/#{escape(channel)}/listings", part_id: Integer(part_id))["data"].first
+    end
+
     def put_listing(part_id, attrs, channel: config.channel)
       put("/api/channels/#{escape(channel)}/listings/#{Integer(part_id)}", attrs)["data"]
     end
@@ -117,8 +123,21 @@ module SolidusFoudra
       get("/api/customers", email:, per: 10)["data"]
     end
 
+    # The customer whose ref on the channel is ref (the shop's user id);
+    # nil when there is none.
+    def customer_by_channel_ref(ref, channel: config.channel)
+      get("/api/customers", channel:, channel_ref: ref.to_s, per: 10)["data"].first
+    end
+
     def create_customer(attrs, idempotency_key:)
       post("/api/customers", attrs, idempotency_key:)["data"]
+    end
+
+    # Adds the shop's ref to an existing customer (refs are added, never
+    # replaced; nothing else about the customer is changed).
+    def add_channel_ref(customer_id, ref, idempotency_key:, channel: config.channel)
+      put("/api/customers/#{Integer(customer_id)}", {channel_refs: [{channel:, ref: ref.to_s}]},
+        idempotency_key:)["data"]
     end
 
     def find_sales_order(channel_order_ref, channel: config.channel)
