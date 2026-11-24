@@ -4,5 +4,5 @@
 # Licensed under the Apache License, Version 2.0; see LICENSE for details.
 
 module SolidusFoudra
-  VERSION = "0.1.0"
+  VERSION = "0.2.0"
 end

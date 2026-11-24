@@ -1,0 +1,127 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Copyright (c) 2026, Kalopa Robotics Limited.
+# Licensed under the Apache License, Version 2.0; see LICENSE for details.
+#
+# Release the gem at the version in the gemspec (which reads it from
+# lib/<name>/version.rb):
+#
+#   1. build pkg/<name>-<version>.gem
+#   2. create the annotated tag v<version> on HEAD and push it to origin
+#   3. push the gem to rubygems.org
+#   4. create the GitHub release v<version>, with the .gem attached
+#
+# Bump the version and commit it first: the script refuses to run with a
+# dirty working tree, off the main branch, or out of step with origin.
+# Each step is skipped if it has already been done, so a release that
+# failed part-way through can be finished by running the script again.
+#
+# Usage: bin/release [-n|--dry-run]
+
+require "open3"
+require "optparse"
+require "rubygems"
+
+Dir.chdir(File.expand_path("..", __dir__))
+
+dry_run = false
+OptionParser.new do |o|
+  o.banner = "Usage: bin/release [-n|--dry-run]"
+  o.on("-n", "--dry-run", "Show what would be done, change nothing") { dry_run = true }
+end.parse!
+
+def die(msg)
+  warn "release: #{msg}"
+  exit 1
+end
+
+# Run a command, echoing it; abort if it fails. Skipped in a dry run.
+def run(*cmd, dry_run:)
+  puts "+ #{cmd.join(' ')}"
+  return if dry_run
+
+  system(*cmd) || die("failed: #{cmd.join(' ')}")
+end
+
+# Run a read-only command and return [stdout, success?].
+def query(*cmd)
+  out, status = Open3.capture2(*cmd, err: File::NULL)
+  [out.strip, status.success?]
+end
+
+def version_from_file(name)
+  path = Dir["lib/**/version.rb"].find { |f| f.include?(name) } || Dir["lib/**/version.rb"].first
+  return unless path
+
+  File.read(path)[/VERSION\s*=\s*["']([^"']+)["']/, 1]
+end
+
+# --- What are we releasing? ---------------------------------------------------
+
+gemspec_path = Dir["*.gemspec"].first || die("no .gemspec in #{Dir.pwd}")
+spec = Gem::Specification.load(gemspec_path) || die("could not load #{gemspec_path}")
+name = spec.name
+version = spec.version&.to_s || version_from_file(name) || die("no version found")
+tag = "v#{version}"
+gem_file = "pkg/#{name}-#{version}.gem"
+
+puts "Releasing #{name} #{version}#{' (dry run)' if dry_run}"
+
+# --- Pre-flight checks --------------------------------------------------------
+
+die("working tree is not clean; commit or stash first") unless query("git", "status", "--porcelain").first.empty?
+
+branch = query("git", "rev-parse", "--abbrev-ref", "HEAD").first
+default_branch = query("git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD").first.sub(%r{\Aorigin/}, "")
+default_branch = "main" if default_branch.empty?
+die("on branch #{branch}, not #{default_branch}") unless branch == default_branch
+
+query("git", "fetch", "--quiet", "origin", default_branch)
+head = query("git", "rev-parse", "HEAD").first
+upstream = query("git", "rev-parse", "origin/#{default_branch}").first
+die("HEAD is not origin/#{default_branch}; push or pull first") unless head == upstream
+
+die("gh is not logged in; run 'gh auth login'") unless query("gh", "auth", "status").last
+
+tag_commit, tag_exists = query("git", "rev-parse", "--verify", "--quiet", "#{tag}^{commit}")
+die("tag #{tag} already exists on another commit (#{tag_commit[0, 7]})") if tag_exists && tag_commit != head
+
+# --- 1. Build -----------------------------------------------------------------
+
+Dir.mkdir("pkg") unless dry_run || Dir.exist?("pkg")
+run("gem", "build", gemspec_path, "--output", gem_file, dry_run:)
+
+# --- 2. Tag -------------------------------------------------------------------
+
+if tag_exists
+  puts "- tag #{tag} already exists on HEAD"
+else
+  run("git", "tag", "-a", tag, "-m", "Release #{version}", dry_run:)
+end
+
+if query("git", "ls-remote", "--exit-code", "--tags", "origin", "refs/tags/#{tag}").last
+  puts "- tag #{tag} already on origin"
+else
+  run("git", "push", "origin", tag, dry_run:)
+end
+
+# --- 3. rubygems.org ----------------------------------------------------------
+
+published = query("gem", "list", "--remote", "--exact", "--all", name).first
+if published[/\(([^)]*)\)/, 1].to_s.split(/,\s*/).include?(version)
+  puts "- #{name} #{version} already on rubygems.org"
+else
+  run("gem", "push", gem_file, dry_run:)
+end
+
+# --- 4. GitHub release --------------------------------------------------------
+
+if query("gh", "release", "view", tag).last
+  puts "- GitHub release #{tag} already exists"
+else
+  run("gh", "release", "create", tag, gem_file,
+      "--title", tag, "--generate-notes", "--verify-tag", dry_run:)
+end
+
+puts "Released #{name} #{version}." unless dry_run
